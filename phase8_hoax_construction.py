@@ -7,7 +7,7 @@ updated: 2026-02-25
 
 phase8_hoax_construction.py — Hoax construction method analysis.
 
-Tests HOW a hoax would have been built by generating four construction
+Tests HOW a hoax would have been built by generating six construction
 methods and comparing their statistical fingerprints to B1/B3:
 
   1. Genuine: English-frequency plaintext → DoI encode
