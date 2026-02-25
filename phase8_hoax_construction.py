@@ -1,6 +1,6 @@
 """
 ---
-version: 0.2.0
+version: 0.3.0
 created: 2026-02-25
 updated: 2026-02-25
 ---
@@ -16,6 +16,7 @@ methods and comparing their statistical fingerprints to B1/B3:
   4. Gibberish-encoded: random letters → DoI encode
   4b. Biased-gibberish: English-vowel-frequency letters → DoI encode
   5. Sequential-gibberish: random letters → DoI encode with nearest-forward scan
+  6. Page-constrained: sequential within physical pages, periodic page flips
 
 Key prediction: B1's distinct ratio (57.3%) is too high for genuine (~24%)
 but too low for uniform random (~92%). Gibberish encoded with DoI should
@@ -42,7 +43,7 @@ from beale import (
     B1, B2, B3, BEALE_DOI, ENGLISH_FREQ,
     benford_test, last_digit_test, distinct_ratio,
     decode_book_cipher, encode_book_cipher, encode_sequential_book_cipher,
-    build_letter_index,
+    encode_page_constrained_book_cipher, build_letter_index,
     bigram_score, index_of_coincidence,
     generate_fake_cipher, generate_random_numbers, generate_human_random,
 )
@@ -848,6 +849,161 @@ def run_reset_sweep(
 
 
 # ============================================================================
+# 8. PAGE-CONSTRAINED CONSTRUCTION MODEL (Phase 8d)
+# ============================================================================
+
+def run_page_model(
+    n_sims: int = 500,
+    seed: int = 42,
+) -> None:
+    """
+    Final construction model combining all findings.
+
+    B1: Full DoI (all 4 pages), sequential gibberish + reset probability.
+        Ward was sloppy/impatient — lost his place frequently.
+
+    B3: DoI[:975] (first 3 pages of 4-page octavo at 325 wpp),
+        page-constrained sequential + reset probability.
+        Ward was methodical — scanned within each page, rarely lost place.
+
+    The 975-word truncation matches B3's max value exactly and corresponds
+    to a page boundary at 325 words/page (standard 1880s octavo).
+    """
+    rng_master = np.random.default_rng(seed)
+
+    b1_stats = compute_extended_stats(B1)
+    b3_stats = compute_extended_stats(B3)
+    b1_sc, b1_dr = b1_stats["serial_corr"], b1_stats["distinct_ratio"]
+    b3_sc, b3_dr = b3_stats["serial_corr"], b3_stats["distinct_ratio"]
+
+    print(f"\n{'='*80}")
+    print("PHASE 8d: PAGE-CONSTRAINED CONSTRUCTION MODEL")
+    print(f"{'='*80}")
+    print(f"  B3 max value: {max(B3)} (DoI has {len(BEALE_DOI)} words)")
+    print(f"  At 325 wpp (standard 1880s octavo): page 3 ends at word 975")
+    print(f"  B3 uses first 3 pages only; B1 uses all 4 pages")
+    print()
+
+    # --- B1: Full DoI, reset sweep ---
+    print(f"  --- B1: Full DoI ({len(BEALE_DOI)} words), sequential + reset ---")
+    print(f"  Target: sc={b1_sc:.3f}, dr={b1_dr:.3f}")
+    print(f"  {'p_reset':>8} {'SC':>7} {'SC_std':>7} {'DR':>7} {'DR_std':>7}"
+          f" {'SC_z':>6} {'DR_z':>6}  notes")
+    print(f"  {'-'*72}")
+
+    index_full = build_letter_index(BEALE_DOI)
+    avail_full = [c for c in string.ascii_lowercase if index_full.get(c)]
+    probs_full = np.ones(len(avail_full)) / len(avail_full)
+
+    b1_best_z = 999.0
+    b1_best_p = 0.0
+
+    for p in [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80]:
+        scs, drs = [], []
+        for _ in range(n_sims):
+            rng = np.random.default_rng(rng_master.integers(0, 2**31))
+            pt = "".join(rng.choice(avail_full, size=520, p=probs_full))
+            c = encode_sequential_book_cipher(
+                pt, BEALE_DOI, reset_prob=p, rng=rng
+            )
+            arr = np.array(c, dtype=float)
+            scs.append(float(np.corrcoef(arr[:-1], arr[1:])[0, 1]))
+            drs.append(len(set(c)) / len(c))
+
+        sc_m, sc_s = float(np.mean(scs)), float(np.std(scs))
+        dr_m, dr_s = float(np.mean(drs)), float(np.std(drs))
+        sc_z = abs(b1_sc - sc_m) / max(sc_s, 1e-10)
+        dr_z = abs(b1_dr - dr_m) / max(dr_s, 1e-10)
+        combined = (sc_z**2 + dr_z**2) ** 0.5
+
+        if combined < b1_best_z:
+            b1_best_z = combined
+            b1_best_p = p
+
+        marker = ""
+        if sc_z < 1.0 and dr_z < 1.5:
+            marker = "<< MATCH"
+        elif sc_z < 2.0 and dr_z < 2.0:
+            marker = "< close"
+
+        print(f"  {p:>8.2f} {sc_m:>7.3f} {sc_s:>7.3f} {dr_m:>7.3f}"
+              f" {dr_s:>7.3f} {sc_z:>6.1f} {dr_z:>6.1f}  {marker}")
+
+    print(f"\n  B1 best: p_reset={b1_best_p:.2f} (combined z={b1_best_z:.2f})")
+
+    # --- B3: DoI[:975], page-constrained, reset sweep ---
+    key_975 = BEALE_DOI[:975]
+    index_975 = build_letter_index(key_975)
+    avail_975 = [c for c in string.ascii_lowercase if index_975.get(c)]
+    probs_975 = np.ones(len(avail_975)) / len(avail_975)
+
+    print(f"\n  --- B3: DoI[:975] (3 pages x 325 words), page-constrained ---")
+    print(f"  Target: sc={b3_sc:.3f}, dr={b3_dr:.3f}")
+    print(f"  {'p_reset':>8} {'SC':>7} {'SC_std':>7} {'DR':>7} {'DR_std':>7}"
+          f" {'SC_z':>6} {'DR_z':>6}  notes")
+    print(f"  {'-'*72}")
+
+    b3_best_z = 999.0
+    b3_best_p = 0.0
+
+    for p in [0.01, 0.02, 0.03, 0.05, 0.08, 0.10, 0.15, 0.20, 0.25, 0.30]:
+        scs, drs = [], []
+        for _ in range(n_sims):
+            rng = np.random.default_rng(rng_master.integers(0, 2**31))
+            pt = "".join(rng.choice(avail_975, size=618, p=probs_975))
+            c = encode_page_constrained_book_cipher(
+                pt, key_975, words_per_page=325, reset_prob=p, rng=rng
+            )
+            arr = np.array(c, dtype=float)
+            scs.append(float(np.corrcoef(arr[:-1], arr[1:])[0, 1]))
+            drs.append(len(set(c)) / len(c))
+
+        sc_m, sc_s = float(np.mean(scs)), float(np.std(scs))
+        dr_m, dr_s = float(np.mean(drs)), float(np.std(drs))
+        sc_z = abs(b3_sc - sc_m) / max(sc_s, 1e-10)
+        dr_z = abs(b3_dr - dr_m) / max(dr_s, 1e-10)
+        combined = (sc_z**2 + dr_z**2) ** 0.5
+
+        if combined < b3_best_z:
+            b3_best_z = combined
+            b3_best_p = p
+
+        marker = ""
+        if sc_z < 1.0 and dr_z < 1.5:
+            marker = "<< MATCH"
+        elif sc_z < 2.0 and dr_z < 2.0:
+            marker = "< close"
+
+        print(f"  {p:>8.2f} {sc_m:>7.3f} {sc_s:>7.3f} {dr_m:>7.3f}"
+              f" {dr_s:>7.3f} {sc_z:>6.1f} {dr_z:>6.1f}  {marker}")
+
+    print(f"\n  B3 best: p_reset={b3_best_p:.2f} (combined z={b3_best_z:.2f})")
+
+    # --- Summary ---
+    print(f"\n  {'='*78}")
+    print("  CONSTRUCTION MODEL SUMMARY")
+    print(f"  {'='*78}")
+    print(f"  Hoaxer: James B. Ward, working from a 4-page octavo printing of the DoI")
+    print(f"  Method: wrote gibberish letters, encoded by scanning forward through DoI")
+    print()
+    print(f"  B1 (520 numbers):")
+    print(f"    - Used all 4 pages of DoI (words 1-{len(BEALE_DOI)})")
+    print(f"    - Lost his place ~{b1_best_p:.0%} of the time (sloppy, impatient)")
+    print(f"    - Best match at p_reset={b1_best_p:.2f}")
+    print()
+    print(f"  B3 (618 numbers):")
+    print(f"    - Used only first 3 pages (words 1-975, max value = {max(B3)})")
+    print(f"    - Stayed on each page, rarely lost place (~{b3_best_p:.0%} reset rate)")
+    print(f"    - Page-constrained selection → lower distinct ratio")
+    print(f"    - Best match at p_reset={b3_best_p:.2f}")
+    print()
+    print(f"  The two ciphers show different construction discipline:")
+    print(f"    B1 = hasty, jumping around the full text")
+    print(f"    B3 = careful, page-by-page scanning through first 3 pages")
+    print()
+
+
+# ============================================================================
 # CLI
 # ============================================================================
 
@@ -863,8 +1019,10 @@ def main() -> None:
                         help="Run human-random specific tests on B1/B3")
     parser.add_argument("--reset-sweep", action="store_true",
                         help="Sweep reset probability for sequential encoding")
+    parser.add_argument("--page-model", action="store_true",
+                        help="Page-constrained construction model (final)")
     parser.add_argument("--all", action="store_true",
-                        help="Everything: generate, analyze, human-tests, reset-sweep, plots")
+                        help="Everything: generate, analyze, human-tests, sweeps, plots")
     parser.add_argument("--n-sims", type=int, default=1000,
                         help="Simulations per population (default: 1000)")
     parser.add_argument("--no-plots", action="store_true",
@@ -875,7 +1033,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if not any([args.generate, args.analyze, args.human_tests,
-                args.reset_sweep, args.all]):
+                args.reset_sweep, args.page_model, args.all]):
         parser.print_help()
         sys.exit(1)
 
@@ -945,6 +1103,9 @@ def main() -> None:
 
     if args.reset_sweep or args.all:
         run_reset_sweep(n_sims=args.n_sims, seed=args.seed)
+
+    if args.page_model or args.all:
+        run_page_model(n_sims=args.n_sims, seed=args.seed)
 
     print("\n" + "=" * 70)
     print("PHASE 8 COMPLETE")

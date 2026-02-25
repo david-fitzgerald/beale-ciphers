@@ -385,6 +385,86 @@ def encode_sequential_book_cipher(
     return result
 
 
+def encode_page_constrained_book_cipher(
+    plaintext: str,
+    key_words: Sequence[str],
+    words_per_page: int = 325,
+    reset_prob: float = 0.0,
+    rng: np.random.Generator | None = None,
+) -> list[int]:
+    """
+    Encode plaintext by scanning forward within a physical page of the key text.
+
+    Models a hoaxer working from a printed book: they stay on one page,
+    selecting homophones only from that page's words. With probability
+    reset_prob per step, they lose their place and flip to a random page.
+
+    Args:
+        plaintext: Lowercase alphabetic string.
+        key_words: The key text as a sequence of words.
+        words_per_page: Words per physical page of the printed key text.
+        reset_prob: Probability of flipping to a random page per step.
+        rng: NumPy random generator (required).
+
+    Returns:
+        List of cipher numbers (1-based word positions).
+    """
+    from bisect import bisect_right
+
+    if rng is None:
+        rng = np.random.default_rng()
+
+    # Build global and per-page letter indices
+    global_index = build_letter_index(key_words)
+    n_pages = (len(key_words) + words_per_page - 1) // words_per_page
+    page_indices: list[dict[str, list[int]]] = []
+    page_bounds: list[tuple[int, int]] = []
+
+    for pg in range(n_pages):
+        ps = pg * words_per_page
+        pe = min((pg + 1) * words_per_page, len(key_words))
+        page_bounds.append((ps, pe))
+        pi: dict[str, list[int]] = {}
+        for c in string.ascii_lowercase:
+            positions = [p for p in global_index.get(c, []) if ps < p <= pe]
+            if positions:
+                pi[c] = positions
+        page_indices.append(pi)
+
+    # Start on a random page at a random position
+    page_idx = int(rng.integers(0, n_pages))
+    ps, pe = page_bounds[page_idx]
+    cursor = int(rng.integers(ps, pe))
+    result: list[int] = []
+
+    for ch in plaintext:
+        ch = ch.lower()
+
+        # Lose your place → flip to random page
+        if reset_prob > 0.0 and rng.random() < reset_prob:
+            page_idx = int(rng.integers(0, n_pages))
+            ps, pe = page_bounds[page_idx]
+            cursor = int(rng.integers(ps, pe))
+
+        pi = page_indices[page_idx]
+        positions = pi.get(ch)
+
+        if positions:
+            idx = bisect_right(positions, cursor)
+            pos = positions[idx] if idx < len(positions) else positions[0]
+        else:
+            # Letter not on this page — fall back to global index
+            gpos = global_index.get(ch, [])
+            if not gpos:
+                continue
+            pos = gpos[int(rng.integers(0, len(gpos)))]
+
+        result.append(pos)
+        cursor = pos
+
+    return result
+
+
 # ============================================================================
 # 3. CODEC — Letter-index cipher encode/decode
 # ============================================================================
