@@ -1,6 +1,6 @@
 # Beale Ciphers: Computational Cryptanalysis
 
-Statistical and computational analysis of the three Beale ciphers (~1820, published 1885). Six phases of automated testing across 9,500+ texts, multiple encoding hypotheses, and DoI variant optimization.
+Statistical and computational analysis of the three Beale ciphers (~1820, published 1885). Seven phases of automated testing across 9,500+ texts, multiple encoding hypotheses, multi-language scoring (Latin/French/Spanish), and DoI variant optimization.
 
 ## Key Findings
 
@@ -17,6 +17,8 @@ The three ciphers have fundamentally different statistical fingerprints. Cipher 
 | Distinct ratio | 24% (expected) | 57% (anomalous) | 43% (anomalous) |
 | Word-level key search (8,594 texts) | DoI = correct key | No key found | No key found |
 | Letter-index key search (9,428 texts) | N/A | No key found | No key found |
+| Multi-language (Latin/French/Spanish) | N/A | Noise in all 4 | Noise in all 4 |
+| Reversed text/key variants | N/A | Noise | Noise |
 
 ### The Gillogly Paradox
 
@@ -45,6 +47,7 @@ The DoI has 6,480 alphabetic characters. B1 max=2906 and B3 max=975 both fit as 
 | 4 | `phase4_corpus.py` | Word-level corpus search: 8,594 Gutenberg texts as candidate B1/B3 keys |
 | 5 | `phase5_letter_cipher.py` | Letter-index hypothesis: 9,428 texts tested as character-level keys |
 | 6 | `phase6_doi_variant.py` | DoI variant optimization: can a close variant extend the Gillogly strings? |
+| 7 | `phase7_multilingual.py` | Multi-language hypothesis: Latin/French/Spanish bigram scoring, reversed text/key |
 
 ## Reproduce
 
@@ -96,6 +99,22 @@ python3 phase4_corpus.py --results
 python3 phase5_letter_cipher.py --results
 ```
 
+### Multi-language analysis (phase 7)
+
+```bash
+# Build language bigram tables (downloads Latin/French/Spanish refs)
+python3 phase7_multilingual.py --build-tables
+
+# Calibration + DoI test (instant once tables built)
+python3 phase7_multilingual.py --calibrate --doi-test
+
+# Re-score top corpus hits from phases 4/5 against all languages
+python3 phase7_multilingual.py --rescan
+
+# Full multi-language corpus sweep
+python3 phase7_multilingual.py --sweep
+```
+
 ### Phase 5 and 6 quick modes
 
 ```bash
@@ -123,7 +142,7 @@ phase3_bigram.py            # Bigram analysis
 phase4_corpus.py            # Word-level corpus search
 phase5_letter_cipher.py     # Letter-index hypothesis
 phase6_doi_variant.py       # DoI variant optimization
-cryptanalysis-research.md   # Literature review and analysis
+phase7_multilingual.py      # Multi-language hypothesis
 ```
 
 ## Key References
