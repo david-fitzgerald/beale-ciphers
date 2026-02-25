@@ -13,6 +13,7 @@ sweep_log.txt
 # Private
 CLAUDE.md
 cryptanalysis-research.md
+hn-post.md
 
 # Regenerable data
 bigram_tables.json
