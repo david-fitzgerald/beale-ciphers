@@ -158,6 +158,10 @@ phase10_b3_cross_cipher.py   # B3 length + cross-cipher analysis
 phase11_methodology.py       # Methodological rigor response
 ```
 
+## Attribution
+
+The majority of the analysis and code in this repo was produced by Claude Opus 4.6 (Anthropic), with David Fitzgerald providing direction, insights, and critical review throughout the process.
+
 ## Key References
 
 - Gillogly, J.F. (1980). "Breaking the Beale Cipher: Not Yet." *Cryptologia* 4(3).
