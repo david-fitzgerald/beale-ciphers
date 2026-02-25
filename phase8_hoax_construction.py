@@ -97,17 +97,22 @@ def generate_sequential_gibberish_cipher(
     count: int,
     key_words: list[str] | tuple[str, ...],
     rng: np.random.Generator,
+    reset_prob: float = 0.0,
 ) -> list[int]:
     """
     Generate cipher by encoding random letters with sequential (nearest-forward)
     homophone selection. Simulates a hoaxer scanning through the DoI in order
     rather than picking random homophones.
+
+    When reset_prob > 0, simulates the hoaxer periodically losing their place
+    and restarting from a random position in the key text.
     """
     index = build_letter_index(key_words)
     available = [c for c in string.ascii_lowercase if index.get(c)]
     probs = np.ones(len(available)) / len(available)
     plaintext = "".join(rng.choice(available, size=count, p=probs))
-    return encode_sequential_book_cipher(plaintext, key_words)
+    return encode_sequential_book_cipher(plaintext, key_words,
+                                         reset_prob=reset_prob, rng=rng)
 
 
 def generate_populations(
@@ -738,6 +743,111 @@ def print_classification_matrix(
 
 
 # ============================================================================
+# 7. RESET PROBABILITY SWEEP (Phase 8c)
+# ============================================================================
+
+def run_reset_sweep(
+    n_sims: int = 500,
+    seed: int = 42,
+) -> None:
+    """
+    Sweep reset_prob to find values matching B1/B3 serial correlation.
+
+    Models a hoaxer who encodes gibberish letters by scanning forward through
+    the DoI, but periodically loses their place and restarts from a random
+    position. Higher reset_prob = more random, lower serial correlation.
+    """
+    rng_master = np.random.default_rng(seed)
+    index = build_letter_index(BEALE_DOI)
+    available = [c for c in string.ascii_lowercase if index.get(c)]
+    probs_uniform = np.ones(len(available)) / len(available)
+
+    b1_stats = compute_extended_stats(B1)
+    b3_stats = compute_extended_stats(B3)
+    b1_sc = b1_stats["serial_corr"]
+    b1_dr = b1_stats["distinct_ratio"]
+    b3_sc = b3_stats["serial_corr"]
+    b3_dr = b3_stats["distinct_ratio"]
+
+    print(f"\n{'='*80}")
+    print("PHASE 8c: RESET PROBABILITY SWEEP")
+    print(f"{'='*80}")
+    print(f"  Model: sequential gibberish + random cursor reset per step")
+    print(f"  Targets: B1 sc={b1_sc:.3f} dr={b1_dr:.3f} | "
+          f"B3 sc={b3_sc:.3f} dr={b3_dr:.3f}")
+    print(f"  Sims per point: {n_sims}")
+
+    reset_probs = [0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35,
+                   0.40, 0.50, 0.60, 0.65, 0.70, 0.75, 0.80, 0.90, 1.0]
+
+    configs = [
+        ("B1", 520, b1_sc, b1_dr),
+        ("B3", 618, b3_sc, b3_dr),
+    ]
+
+    for cipher_name, count, target_sc, target_dr in configs:
+        print(f"\n  --- {cipher_name} (n={count}, target sc={target_sc:.3f}, "
+              f"dr={target_dr:.3f}) ---")
+        print(f"  {'p_reset':>8} {'SC mean':>8} {'SC std':>8} {'DR mean':>8} "
+              f"{'DR std':>8} {'SC z':>8} {'DR z':>8}  {'SC match':>9}")
+        print(f"  {'-'*72}")
+
+        best_sc_z = 999.0
+        best_p_sc = 0.0
+        best_combined_z = 999.0
+        best_p_combined = 0.0
+
+        for p in reset_probs:
+            sc_vals = []
+            dr_vals = []
+
+            for i in range(n_sims):
+                rng = np.random.default_rng(rng_master.integers(0, 2**31))
+                pt = "".join(rng.choice(available, size=count, p=probs_uniform))
+                cipher = encode_sequential_book_cipher(
+                    pt, BEALE_DOI, reset_prob=p, rng=rng
+                )
+                arr = np.array(cipher, dtype=float)
+                sc_vals.append(float(np.corrcoef(arr[:-1], arr[1:])[0, 1]))
+                dr_vals.append(len(set(cipher)) / len(cipher))
+
+            sc_mean = float(np.mean(sc_vals))
+            sc_std = float(np.std(sc_vals))
+            dr_mean = float(np.mean(dr_vals))
+            dr_std = float(np.std(dr_vals))
+            sc_z = abs(target_sc - sc_mean) / max(sc_std, 1e-10)
+            dr_z = abs(target_dr - dr_mean) / max(dr_std, 1e-10)
+            combined_z = (sc_z**2 + dr_z**2) ** 0.5
+
+            marker = ""
+            if sc_z < best_sc_z:
+                best_sc_z = sc_z
+                best_p_sc = p
+            if combined_z < best_combined_z:
+                best_combined_z = combined_z
+                best_p_combined = p
+            if sc_z < 2.0:
+                marker = "<< match" if sc_z < 1.0 else "< close"
+
+            print(f"  {p:>8.2f} {sc_mean:>8.3f} {sc_std:>8.3f} {dr_mean:>8.3f} "
+                  f"{dr_std:>8.3f} {sc_z:>8.1f} {dr_z:>8.1f}  {marker:>9}")
+
+        print(f"\n  Best SC match: p_reset={best_p_sc:.2f} (z={best_sc_z:.2f})")
+        print(f"  Best combined (SC+DR): p_reset={best_p_combined:.2f} "
+              f"(z={best_combined_z:.2f})")
+
+    print(f"\n  {'='*80}")
+    print("  INTERPRETATION")
+    print(f"  {'='*80}")
+    print("  If best p_reset differs for B1 vs B3, the hoaxer used different")
+    print("  levels of care/attention for each cipher.")
+    print("  p_reset ≈ 0 → methodical scanning (barely loses place)")
+    print("  p_reset ≈ 0.5-0.7 → frequent restarts (sloppy, impatient)")
+    print("  p_reset ≈ 1.0 → pure random selection (no sequential structure)")
+    print()
+
+
+# ============================================================================
 # CLI
 # ============================================================================
 
@@ -751,8 +861,10 @@ def main() -> None:
                         help="Run classification (requires --generate first or --all)")
     parser.add_argument("--human-tests", action="store_true",
                         help="Run human-random specific tests on B1/B3")
+    parser.add_argument("--reset-sweep", action="store_true",
+                        help="Sweep reset probability for sequential encoding")
     parser.add_argument("--all", action="store_true",
-                        help="Everything: generate, analyze, human-tests, plots")
+                        help="Everything: generate, analyze, human-tests, reset-sweep, plots")
     parser.add_argument("--n-sims", type=int, default=1000,
                         help="Simulations per population (default: 1000)")
     parser.add_argument("--no-plots", action="store_true",
@@ -762,7 +874,8 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     args = parser.parse_args()
 
-    if not any([args.generate, args.analyze, args.human_tests, args.all]):
+    if not any([args.generate, args.analyze, args.human_tests,
+                args.reset_sweep, args.all]):
         parser.print_help()
         sys.exit(1)
 
@@ -829,6 +942,9 @@ def main() -> None:
     if do_plots and pop_stats is not None:
         print("\n--- Generating plots ---")
         plot_distinct_ratio_histograms(pop_stats, b1_stats, b3_stats, save_dir)
+
+    if args.reset_sweep or args.all:
+        run_reset_sweep(n_sims=args.n_sims, seed=args.seed)
 
     print("\n" + "=" * 70)
     print("PHASE 8 COMPLETE")

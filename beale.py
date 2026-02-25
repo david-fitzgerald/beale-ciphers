@@ -328,17 +328,25 @@ def encode_book_cipher(
 def encode_sequential_book_cipher(
     plaintext: str,
     key_words: Sequence[str],
+    reset_prob: float = 0.0,
+    rng: np.random.Generator | None = None,
 ) -> list[int]:
     """
     Encode plaintext by scanning sequentially through the key text.
 
     For each plaintext letter, selects the nearest-forward homophone position
     (smallest position > cursor). Wraps to the beginning when past the end.
-    Deterministic given plaintext — randomness comes from the input text.
+
+    When reset_prob > 0, simulates losing your place: before each lookup,
+    with probability reset_prob the cursor jumps to a random position in
+    the key text. Models a hoaxer who periodically loses track of where
+    they are in the document and restarts from wherever their eye lands.
 
     Args:
         plaintext: Lowercase alphabetic string.
         key_words: The key text as a sequence of words.
+        reset_prob: Probability of random cursor reset per step (0 = perfect).
+        rng: NumPy random generator (required when reset_prob > 0).
 
     Returns:
         List of cipher numbers (1-based word positions).
@@ -349,6 +357,7 @@ def encode_sequential_book_cipher(
     from bisect import bisect_right
 
     index = build_letter_index(key_words)
+    max_pos = len(key_words)
     cursor = 0
     result: list[int] = []
 
@@ -357,6 +366,10 @@ def encode_sequential_book_cipher(
         positions = index.get(ch)
         if not positions:
             raise ValueError(f"No homophone available for letter '{ch}'")
+
+        # Simulate losing your place
+        if reset_prob > 0.0 and rng is not None and rng.random() < reset_prob:
+            cursor = int(rng.integers(0, max_pos))
 
         # Find smallest position > cursor
         idx = bisect_right(positions, cursor)
