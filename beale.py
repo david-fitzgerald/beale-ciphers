@@ -1,6 +1,6 @@
 """
 ---
-version: 0.2.0
+version: 0.3.0
 created: 2026-02-24
 updated: 2026-02-25
 ---
@@ -725,6 +725,52 @@ def bigram_score(text: str) -> float:
         total += BIGRAM_LOGPROB.get(bg, BIGRAM_FLOOR)
         count += 1
     return total / count if count > 0 else BIGRAM_FLOOR
+
+
+def build_bigram_table(text: str, floor: float = BIGRAM_FLOOR) -> dict[str, float]:
+    """
+    Build a bigram log-probability table from a corpus text.
+
+    Args:
+        text: Raw text (alpha chars extracted, lowercased).
+        floor: Log-prob floor for unseen bigrams.
+
+    Returns:
+        Dict mapping each of 676 bigrams to log10(probability).
+    """
+    clean = "".join(c for c in text.lower() if c in string.ascii_lowercase)
+    counts: dict[str, int] = {}
+    for i in range(len(clean) - 1):
+        bg = clean[i] + clean[i + 1]
+        counts[bg] = counts.get(bg, 0) + 1
+    total = sum(counts.values())
+    if total == 0:
+        return {a + b: floor for a in string.ascii_lowercase for b in string.ascii_lowercase}
+    table: dict[str, float] = {}
+    for a in string.ascii_lowercase:
+        for b in string.ascii_lowercase:
+            bg = a + b
+            c = counts.get(bg, 0)
+            table[bg] = math.log10(c / total) if c > 0 else floor
+    return table
+
+
+def score_with_bigram_table(text: str, table: dict[str, float], floor: float = BIGRAM_FLOOR) -> float:
+    """
+    Score text against an arbitrary bigram log-probability table.
+
+    Same interface as bigram_score() but uses a custom table.
+    """
+    clean = "".join(c for c in text.lower() if c in string.ascii_lowercase)
+    if len(clean) < 2:
+        return floor
+    total = 0.0
+    count = 0
+    for i in range(len(clean) - 1):
+        bg = clean[i] + clean[i + 1]
+        total += table.get(bg, floor)
+        count += 1
+    return total / count if count > 0 else floor
 
 
 def index_of_coincidence(text: str) -> float:
