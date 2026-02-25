@@ -325,6 +325,53 @@ def encode_book_cipher(
     return result
 
 
+def encode_sequential_book_cipher(
+    plaintext: str,
+    key_words: Sequence[str],
+) -> list[int]:
+    """
+    Encode plaintext by scanning sequentially through the key text.
+
+    For each plaintext letter, selects the nearest-forward homophone position
+    (smallest position > cursor). Wraps to the beginning when past the end.
+    Deterministic given plaintext — randomness comes from the input text.
+
+    Args:
+        plaintext: Lowercase alphabetic string.
+        key_words: The key text as a sequence of words.
+
+    Returns:
+        List of cipher numbers (1-based word positions).
+
+    Raises:
+        ValueError: If a letter has no available homophone in the key text.
+    """
+    from bisect import bisect_right
+
+    index = build_letter_index(key_words)
+    cursor = 0
+    result: list[int] = []
+
+    for ch in plaintext:
+        ch = ch.lower()
+        positions = index.get(ch)
+        if not positions:
+            raise ValueError(f"No homophone available for letter '{ch}'")
+
+        # Find smallest position > cursor
+        idx = bisect_right(positions, cursor)
+        if idx < len(positions):
+            pos = positions[idx]
+        else:
+            # Wrap: take the first position
+            pos = positions[0]
+
+        result.append(pos)
+        cursor = pos
+
+    return result
+
+
 # ============================================================================
 # 3. CODEC — Letter-index cipher encode/decode
 # ============================================================================

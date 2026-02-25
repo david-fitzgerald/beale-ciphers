@@ -1,6 +1,6 @@
 """
 ---
-version: 0.1.0
+version: 0.2.0
 created: 2026-02-25
 updated: 2026-02-25
 ---
@@ -15,6 +15,7 @@ methods and comparing their statistical fingerprints to B1/B3:
   3. Human-random: biased random (log-normal, digit pref, sequential avoid)
   4. Gibberish-encoded: random letters → DoI encode
   4b. Biased-gibberish: English-vowel-frequency letters → DoI encode
+  5. Sequential-gibberish: random letters → DoI encode with nearest-forward scan
 
 Key prediction: B1's distinct ratio (57.3%) is too high for genuine (~24%)
 but too low for uniform random (~92%). Gibberish encoded with DoI should
@@ -40,7 +41,8 @@ from scipy import stats as sp_stats
 from beale import (
     B1, B2, B3, BEALE_DOI, ENGLISH_FREQ,
     benford_test, last_digit_test, distinct_ratio,
-    decode_book_cipher, encode_book_cipher, build_letter_index,
+    decode_book_cipher, encode_book_cipher, encode_sequential_book_cipher,
+    build_letter_index,
     bigram_score, index_of_coincidence,
     generate_fake_cipher, generate_random_numbers, generate_human_random,
 )
@@ -91,12 +93,29 @@ def generate_gibberish_cipher(
     return encode_book_cipher(plaintext, key_words, rng)
 
 
+def generate_sequential_gibberish_cipher(
+    count: int,
+    key_words: list[str] | tuple[str, ...],
+    rng: np.random.Generator,
+) -> list[int]:
+    """
+    Generate cipher by encoding random letters with sequential (nearest-forward)
+    homophone selection. Simulates a hoaxer scanning through the DoI in order
+    rather than picking random homophones.
+    """
+    index = build_letter_index(key_words)
+    available = [c for c in string.ascii_lowercase if index.get(c)]
+    probs = np.ones(len(available)) / len(available)
+    plaintext = "".join(rng.choice(available, size=count, p=probs))
+    return encode_sequential_book_cipher(plaintext, key_words)
+
+
 def generate_populations(
     n_sims: int = 1000,
     seed: int = 42,
 ) -> dict:
     """
-    Generate five populations for B1-like and B3-like cipher parameters.
+    Generate six populations for B1-like and B3-like cipher parameters.
 
     Returns dict keyed by "{method}_{length}" with lists of cipher number sequences.
     Also returns the actual B1/B3 for convenience.
@@ -115,7 +134,7 @@ def generate_populations(
         count = cfg["count"]
         max_val = cfg["max_val"]
 
-        for method in ["genuine", "random", "human_random", "gibberish", "biased_gibberish"]:
+        for method in METHODS:
             pop_key = f"{method}_{length_key}"
             populations[pop_key] = []
             t0 = time.time()
@@ -140,6 +159,10 @@ def generate_populations(
                 elif method == "biased_gibberish":
                     cipher = generate_gibberish_cipher(
                         count, BEALE_DOI, rng, _BIASED_GIBBERISH_FREQ
+                    )
+                elif method == "seq_gibberish":
+                    cipher = generate_sequential_gibberish_cipher(
+                        count, BEALE_DOI, rng
                     )
 
                 populations[pop_key].append(cipher)
@@ -215,13 +238,15 @@ def compute_extended_stats(
 # 3. DISTRIBUTION COMPARISON + CLASSIFICATION
 # ============================================================================
 
-METHODS = ["genuine", "random", "human_random", "gibberish", "biased_gibberish"]
+METHODS = ["genuine", "random", "human_random", "gibberish", "biased_gibberish",
+           "seq_gibberish"]
 METHOD_LABELS = {
     "genuine": "Genuine",
     "random": "Random",
     "human_random": "Human-Rnd",
     "gibberish": "Gibberish",
     "biased_gibberish": "BiasGib",
+    "seq_gibberish": "SeqGib",
 }
 
 METRICS = [
@@ -572,6 +597,7 @@ def plot_distinct_ratio_histograms(
         "human_random": "#e74c3c",
         "gibberish": "#3498db",
         "biased_gibberish": "#9b59b6",
+        "seq_gibberish": "#e67e22",
     }
 
     for length_key, cipher_name, actual_dr, marker_color in [
