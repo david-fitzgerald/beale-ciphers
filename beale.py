@@ -1,6 +1,6 @@
 """
 ---
-version: 0.3.0
+version: 0.4.0
 created: 2026-02-24
 updated: 2026-02-25
 ---
@@ -922,6 +922,69 @@ def generate_random_numbers(
     if rng is None:
         rng = np.random.default_rng()
     return [int(x) for x in rng.integers(1, max_val + 1, size=count)]
+
+
+def generate_human_random(
+    count: int,
+    max_val: int,
+    rng: np.random.Generator | None = None,
+) -> list[int]:
+    """
+    Generate numbers with known human-random biases.
+
+    Simulates: small-number bias (log-normal), digit preference (7 favored,
+    0 penalized), sequential avoidance (reject if within 5% of previous),
+    repeat suppression (halved probability of exact repeats).
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+
+    # Base distribution: log-normal skewed toward smaller values
+    # Tuned so median ≈ max_val * 0.35, bulk within 1-max_val
+    sigma = 0.8
+    mu = math.log(max_val * 0.35)
+    threshold = max_val * 0.05  # sequential avoidance distance
+
+    result: list[int] = []
+    prev = -1
+    attempts = 0
+    max_attempts = count * 20
+
+    while len(result) < count and attempts < max_attempts:
+        attempts += 1
+        # Draw from log-normal, clamp to range
+        raw = rng.lognormal(mu, sigma)
+        val = int(round(raw))
+        if val < 1 or val > max_val:
+            continue
+
+        # Digit preference: boost 7-ending, penalize 0-ending
+        last_dig = val % 10
+        if last_dig == 0 and rng.random() < 0.3:
+            continue  # reject 30% of 0-endings
+        if last_dig != 7 and rng.random() < 0.05:
+            # Slight chance to shift to nearest 7-ending
+            val = val - last_dig + 7
+            if val < 1 or val > max_val:
+                continue
+
+        # Sequential avoidance: reject if too close to previous
+        if prev > 0 and abs(val - prev) < threshold:
+            if rng.random() < 0.6:  # reject 60% of close pairs
+                continue
+
+        # Repeat avoidance: halve probability of exact repeats
+        if val == prev and rng.random() < 0.5:
+            continue
+
+        result.append(val)
+        prev = val
+
+    # Fallback: fill any remaining with uniform (shouldn't happen)
+    while len(result) < count:
+        result.append(int(rng.integers(1, max_val + 1)))
+
+    return result
 
 
 # ============================================================================
