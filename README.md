@@ -83,14 +83,14 @@ This also explains the **distinct ratio** — the percentage of unique numbers i
 
 Here's where statistics meets physical forensics.
 
-The Beale DoI has 1,311 words. Standard 1880s octavo printing fits ~325 words per page, giving a 4-page document. Now look at the cipher ranges:
+The Beale DoI has 1,311 words. Standard 1880s octavo printing fits ~325 words per page, giving a 4-page document with an overflow of 11 words — the final fragment of the closing sentence (*"to each other our lives our fortunes and our sacred honor"*). These would either have been squeezed into the bottom margin of page 4 to save paper, or spilled onto a fifth page alongside the signatories' names. Either way, they sat visually apart from the main body of text. Now look at the cipher ranges:
 
 - **B3's maximum value is exactly 975** — that's 3 × 325. The last word on page 3. The hoaxer never turned to page 4.
 - **B1's maximum in-range value is exactly 1,300** — that's 4 × 325. The last word on page 4. (The DoI has 1,311 words total — those last 11 words spill past the page break.)
 
 Both ciphers' number ranges land on exact page boundaries. We tested every plausible words-per-page value from 250 to 400: **325 is the only value where both ciphers hit page boundaries simultaneously.** The probability of this occurring by chance: P ≈ 0.0001.
 
-The physical layout confirms this. At 325 words per page, word 1300 = "pledge" — the end of the DoI's closing sentence (*"we mutually pledge..."*). The final 11 words (*"to each other our lives our fortunes and our sacred honor"*) spill past the page boundary. B3 has zero values above 975. B1 has 11 stray values above 1300 (the sloppy hoaxer occasionally writing out-of-range numbers), but **zero values in the 1301-1311 range** — they skipped right over those 11 overflow words. Neither cipher ever references the fragment past the page break. Hard to explain if the ciphers encode genuine messages; completely natural if the hoaxer's eyes stopped at the bottom of the page.
+The physical layout confirms this. Word 1300 = "pledge" — the last word before the 11-word overflow. B3 has zero values above 975. B1 has 11 stray values above 1300 (the sloppy hoaxer occasionally writing out-of-range numbers), but **zero values in the 1301-1311 range** — they skipped right over those overflow words. Neither cipher ever references the fragment past the page break. Hard to explain if the ciphers encode genuine messages; completely natural if the hoaxer's eyes stopped at the bottom of the page.
 
 The construction model, now page-constrained, matches both ciphers within 1σ on serial correlation AND distinct ratio simultaneously:
 
