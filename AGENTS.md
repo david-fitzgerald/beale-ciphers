@@ -1,5 +1,8 @@
 # Beale Ciphers — Claude Instructions
 
+## Serves
+- **Primary:** `research/lost-treasure/` — cryptanalytic proof-of-concept (P(hoax) >99.99%)
+
 ## Scope
 
 Cryptanalytic research into the three Beale ciphers (~1820, published 1885). Pure code-breaking and statistical classification problem -- not a physical treasure hunt.
