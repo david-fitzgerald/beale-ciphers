@@ -1,4 +1,10 @@
+Endpoint — project complete. No further work; preserved for reference.
+
 # Beale Ciphers — Claude Instructions
+
+Cryptanalytic classification of the three Beale ciphers (~1820, published 1885). P(hoax) >99.99%. Published to HN February 2026.
+
+**Phase:** complete | **Date:** 2026-02
 
 ## Serves
 - **Primary:** `research/lost-treasure/` — cryptanalytic proof-of-concept (P(hoax) >99.99%)
