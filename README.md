@@ -4,6 +4,10 @@ In 1885, a pamphlet appeared in Virginia describing three coded messages hiding 
 
 **This repo identifies exactly how the hoax was constructed, reconstructs the hoaxer's physical workflow, and resolves every major anomaly in the 140-year debate.** Combined Bayes Factor ≈ 2 × 10⁷. All code and data included to reproduce everything.
 
+## Attribution
+
+For those who care about such things, the majority of the analysis and code in this repo was produced by Claude Opus 4.6 (Anthropic), with David Fitzgerald guiding Claude, providing insights, direction and critical review throughout the process.
+
 ## How a Book Cipher Works
 
 A book cipher turns a message into a sequence of numbers using a shared text (the "key"). For each letter you want to encode, you find a word in the key text that starts with that letter, and write down that word's position number. To encode the letter "t", you might pick word 58 ("the"), word 400 ("truth"), or word 912 ("to") — all valid choices that decode back to "t". These alternatives are called **homophones**: multiple numbers that map to the same letter.
@@ -272,10 +276,6 @@ phase9_b2_analysis.py        # B2 construction method analysis
 phase10_b3_cross_cipher.py   # B3 length + cross-cipher analysis
 phase11_methodology.py       # Methodological rigor response
 ```
-
-## Attribution
-
-The majority of the analysis and code in this repo was produced by Claude Opus 4.6 (Anthropic), with David Fitzgerald providing direction, insights, and critical review throughout the process.
 
 ## Key References
 
